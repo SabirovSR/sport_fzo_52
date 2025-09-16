@@ -86,7 +86,7 @@ jobs:
         pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-fail-under=80
     
     - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         flags: unittests
@@ -120,7 +120,7 @@ jobs:
       run: bandit -r app -f json -o bandit-report.json || true
     
     - name: Upload security reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: security-reports
         path: |
@@ -227,5 +227,7 @@ jobs:
       with:
         status: ${{ job.status }}
         channel: '#deployments'
-        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       if: always()
