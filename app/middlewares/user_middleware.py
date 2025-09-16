@@ -6,6 +6,7 @@ from loguru import logger
 from app.database.repositories import user_repo
 from app.models import User
 from app.utils.metrics import metrics
+from app.utils.sentry import capture_error, set_user_context, add_breadcrumb
 
 
 class UserMiddleware(BaseMiddleware):
@@ -42,6 +43,7 @@ class UserMiddleware(BaseMiddleware):
                 user = await user_repo.create(user)
                 logger.info(f"Created new user: {user.telegram_id}")
                 metrics.record_user_registration()
+                add_breadcrumb(f"New user created: {user.telegram_id}", category="user", level="info")
             else:
                 # Update user info if changed
                 updated = False
@@ -62,11 +64,24 @@ class UserMiddleware(BaseMiddleware):
                 if updated:
                     await user_repo.update(user)
             
+            # Set user context for Sentry
+            set_user_context(
+                user_id=user.telegram_id,
+                username=user.username,
+                display_name=user.display_name,
+                is_admin=user.is_admin,
+                registration_completed=user.registration_completed
+            )
+            
             # Add user to data context
             data["user"] = user
             
         except Exception as e:
             logger.error(f"User middleware error: {e}")
+            capture_error(e, extra={
+                "telegram_user_id": telegram_user.id,
+                "context": "user_middleware"
+            })
             # Continue without user context if error occurs
         
         return await handler(event, data)

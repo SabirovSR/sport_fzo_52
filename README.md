@@ -60,6 +60,14 @@ Enterprise-grade телеграм-бот для каталога физкуль�
 - Docker и Docker Compose
 - Минимум 2GB RAM
 - 10GB свободного места на диске
+- Домен с SSL сертификатом (для production)
+
+### Новые возможности v1.1.0
+- ✅ **Автоматическое тестирование** с pytest и aiogram mocks
+- ✅ **SSL сертификаты** с автоматическим обновлением через Let's Encrypt
+- ✅ **Мониторинг ошибок** с Sentry интеграцией
+- ✅ **CI/CD pipeline** с GitHub Actions
+- ✅ **Security scanning** и автоматические обновления зависимостей
 
 ### Быстрый запуск (Development)
 
@@ -99,24 +107,52 @@ docker-compose exec bot python scripts/init_data.py
 docker-compose exec bot python scripts/admin_tools.py make_admin YOUR_TELEGRAM_ID super
 ```
 
-### Production развертывание
+### Production развертывание с SSL
 
 1. Создайте production конфигурацию:
 ```bash
-cp .env.prod.example .env.prod
+cp .env.example .env
 ```
 
-2. Настройте SSL сертификаты:
+2. Настройте переменные окружения:
 ```bash
-mkdir ssl
-# Скопируйте ваши SSL сертификаты в папку ssl/
+nano .env
 ```
 
-3. Запустите deployment скрипт:
+Обязательные параметры для production:
+- `BOT_TOKEN` - токен Telegram бота
+- `WEBHOOK_URL` - https://your-domain.com/webhook
+- `SSL_DOMAIN` - your-domain.com
+- `SSL_EMAIL` - admin@your-domain.com
+- `SENTRY_DSN` - для мониторинга ошибок (опционально)
+
+3. Запустите с SSL поддержкой:
 ```bash
-chmod +x scripts/deploy.sh
-./scripts/deploy.sh
+docker-compose -f docker-compose.ssl.yml up -d
 ```
+
+4. Проверьте SSL сертификат:
+```bash
+python scripts/ssl_manager.py --domain your-domain.com --email admin@your-domain.com --check
+```
+
+### CI/CD настройка
+
+1. **Настройте GitHub Secrets** (см. [.github/SECRETS.md](.github/SECRETS.md)):
+   - `BOT_TOKEN` - токен Telegram бота
+   - `DOCKER_USERNAME` - Docker Hub username
+   - `DOCKER_PASSWORD` - Docker Hub password
+   - `SLACK_WEBHOOK_URL` - для уведомлений (опционально)
+
+2. **Настройте Environments**:
+   - `staging` - для тестирования
+   - `production` - для продакшена
+
+3. **Автоматические процессы**:
+   - Тестирование при каждом push/PR
+   - Security scanning еженедельно
+   - SSL сертификаты обновляются автоматически
+   - Docker образы публикуются автоматически
 
 ## 📋 Управление
 

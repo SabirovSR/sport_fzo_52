@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = Field(30, env="RATE_LIMIT_REQUESTS")
     RATE_LIMIT_WINDOW: int = Field(60, env="RATE_LIMIT_WINDOW")
     
+    # Monitoring settings
+    SENTRY_DSN: str = Field("", env="SENTRY_DSN")
+    APP_VERSION: str = Field("1.0.0", env="APP_VERSION")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

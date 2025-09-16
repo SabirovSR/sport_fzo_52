@@ -9,6 +9,7 @@ from loguru import logger
 
 from app.config import settings
 from app.utils.logging import setup_logging
+from app.utils.sentry import initialize_sentry, capture_error, add_breadcrumb
 from app.database.connection import init_database, close_database
 from app.middlewares import RateLimitMiddleware, UserMiddleware, MetricsMiddleware
 from app.handlers import start_router, catalog_router, applications_router, admin_router, health_router
@@ -50,6 +51,10 @@ async def main():
     
     # Setup logging
     setup_logging()
+    
+    # Initialize Sentry for error monitoring
+    initialize_sentry()
+    add_breadcrumb("Bot starting", category="lifecycle", level="info")
     
     # Create bot and dispatcher
     global bot, dp
@@ -130,8 +135,10 @@ async def main():
             
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
+        add_breadcrumb("Bot stopped by user", category="lifecycle", level="info")
     except Exception as e:
         logger.error(f"Bot error: {e}")
+        capture_error(e, extra={"context": "main_loop"})
         sys.exit(1)
     finally:
         await on_shutdown()
@@ -142,6 +149,8 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
+        add_breadcrumb("Bot stopped by user", category="lifecycle", level="info")
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+        capture_error(e, extra={"context": "fatal_error"})
         sys.exit(1)
