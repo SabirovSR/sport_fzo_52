@@ -4,6 +4,7 @@ import json
 from loguru import logger
 
 from app.database.connection import check_database_health, get_database_stats
+from app.utils.metrics import metrics
 
 
 async def health_check(request):
@@ -79,9 +80,52 @@ async def ready_check(request):
         )
 
 
+async def metrics_endpoint(request):
+    """Prometheus metrics endpoint"""
+    try:
+        metrics_data = metrics.get_metrics()
+        return web.Response(
+            text=metrics_data,
+            content_type='text/plain; version=0.0.4; charset=utf-8'
+        )
+    except Exception as e:
+        logger.error(f"Metrics endpoint error: {e}")
+        return web.Response(
+            text=f"# Error generating metrics: {e}",
+            status=500,
+            content_type='text/plain'
+        )
+
+
+async def alerts_webhook(request):
+    """Webhook endpoint for receiving alerts from Alertmanager"""
+    try:
+        data = await request.json()
+        logger.info(f"Received alert webhook: {data}")
+        
+        # Process alerts (could send to Telegram admin, store in DB, etc.)
+        for alert in data.get('alerts', []):
+            alert_name = alert.get('labels', {}).get('alertname', 'Unknown')
+            status = alert.get('status', 'unknown')
+            annotations = alert.get('annotations', {})
+            
+            logger.warning(f"Alert: {alert_name} - Status: {status}")
+            
+            # Here you could send alerts to admin via Telegram
+            # or store them in the database for later processing
+        
+        return web.json_response({"status": "ok"})
+        
+    except Exception as e:
+        logger.error(f"Alerts webhook error: {e}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
 def setup_health_routes(app: web.Application):
     """Setup health check routes"""
     app.router.add_get('/health', health_check)
     app.router.add_get('/ready', ready_check)
     app.router.add_get('/healthz', health_check)  # Kubernetes style
     app.router.add_get('/readyz', ready_check)   # Kubernetes style
+    app.router.add_get('/metrics', metrics_endpoint)  # Prometheus metrics
+    app.router.add_post('/webhook/alerts', alerts_webhook)  # Alertmanager webhook

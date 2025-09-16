@@ -6,6 +6,7 @@ import redis.asyncio as redis
 from loguru import logger
 
 from app.config import settings
+from app.utils.metrics import metrics
 
 
 class RateLimitMiddleware(BaseMiddleware):
@@ -55,6 +56,7 @@ class RateLimitMiddleware(BaseMiddleware):
                 if current_requests >= self.requests_limit:
                     # Rate limit exceeded
                     logger.warning(f"Rate limit exceeded for user {user_id}")
+                    metrics.record_rate_limit_hit(str(user_id), "message" if isinstance(event, Message) else "callback_query")
                     
                     if isinstance(event, Message):
                         await event.answer(

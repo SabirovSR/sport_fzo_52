@@ -1,0 +1,405 @@
+version: '3.8'
+
+services:
+  # ========== MONGODB REPLICA SET ==========
+  
+  mongodb-primary:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_primary
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-fok_bot}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_primary_data:/data/db
+      - ./init-mongo-replica.js:/docker-entrypoint-initdb.d/init-mongo-replica.js:ro
+      - ./mongodb-keyfile:/opt/keyfile/mongodb-keyfile:ro
+    command: >
+      mongod --replSet fok-replica-set
+             --keyFile /opt/keyfile/mongodb-keyfile
+             --bind_ip_all
+    networks:
+      - fok_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mongodb-secondary-1:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_secondary_1
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_secondary1_data:/data/db
+      - ./mongodb-keyfile:/opt/keyfile/mongodb-keyfile:ro
+    command: >
+      mongod --replSet fok-replica-set
+             --keyFile /opt/keyfile/mongodb-keyfile
+             --bind_ip_all
+    depends_on:
+      - mongodb-primary
+    networks:
+      - fok_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mongodb-secondary-2:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_secondary_2
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongodb_secondary2_data:/data/db
+      - ./mongodb-keyfile:/opt/keyfile/mongodb-keyfile:ro
+    command: >
+      mongod --replSet fok-replica-set
+             --keyFile /opt/keyfile/mongodb-keyfile
+             --bind_ip_all
+    depends_on:
+      - mongodb-primary
+    networks:
+      - fok_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ========== REDIS CLUSTER ==========
+  
+  redis-node-1:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_1
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+      - "16379:16379"
+    volumes:
+      - redis_node1_data:/data
+      - ./redis-cluster/redis-node-1.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - fok_network
+
+  redis-node-2:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_2
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+      - "16380:16379"
+    volumes:
+      - redis_node2_data:/data
+      - ./redis-cluster/redis-node-2.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - fok_network
+
+  redis-node-3:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_3
+    restart: unless-stopped
+    ports:
+      - "6381:6379"
+      - "16381:16379"
+    volumes:
+      - redis_node3_data:/data
+      - ./redis-cluster/redis-node-3.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - fok_network
+
+  redis-node-4:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_4
+    restart: unless-stopped
+    ports:
+      - "6382:6379"
+      - "16382:16379"
+    volumes:
+      - redis_node4_data:/data
+      - ./redis-cluster/redis-node-4.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - fok_network
+
+  redis-node-5:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_5
+    restart: unless-stopped
+    ports:
+      - "6383:6379"
+      - "16383:16379"
+    volumes:
+      - redis_node5_data:/data
+      - ./redis-cluster/redis-node-5.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - fok_network
+
+  redis-node-6:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_6
+    restart: unless-stopped
+    ports:
+      - "6384:6379"
+      - "16384:16379"
+    volumes:
+      - redis_node6_data:/data
+      - ./redis-cluster/redis-node-6.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - fok_network
+
+  # Redis cluster initialization
+  redis-cluster-init:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_cluster_init
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    command: >
+      sh -c "sleep 10 && 
+             redis-cli --cluster create 
+             redis-node-1:6379 redis-node-2:6379 redis-node-3:6379 
+             redis-node-4:6379 redis-node-5:6379 redis-node-6:6379 
+             --cluster-replicas 1 --cluster-yes"
+    networks:
+      - fok_network
+
+  # ========== LOAD BALANCER (HAProxy) ==========
+  
+  haproxy:
+    image: haproxy:2.8-alpine
+    container_name: fok_bot_haproxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"  # Stats page
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./ssl:/etc/ssl/certs:ro
+    depends_on:
+      - bot-1
+      - bot-2
+      - bot-3
+    networks:
+      - fok_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8404/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========== BOT INSTANCES ==========
+  
+  bot-1:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_1
+    restart: unless-stopped
+    env_file:
+      - .env.cluster
+    environment:
+      - BOT_INSTANCE_ID=1
+      - MONGO_HOST=mongodb-primary,mongodb-secondary-1,mongodb-secondary-2
+      - REDIS_HOST=redis-node-1,redis-node-2,redis-node-3,redis-node-4,redis-node-5,redis-node-6
+    depends_on:
+      - mongodb-primary
+      - redis-cluster-init
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  bot-2:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_2
+    restart: unless-stopped
+    env_file:
+      - .env.cluster
+    environment:
+      - BOT_INSTANCE_ID=2
+      - MONGO_HOST=mongodb-primary,mongodb-secondary-1,mongodb-secondary-2
+      - REDIS_HOST=redis-node-1,redis-node-2,redis-node-3,redis-node-4,redis-node-5,redis-node-6
+    depends_on:
+      - mongodb-primary
+      - redis-cluster-init
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  bot-3:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_3
+    restart: unless-stopped
+    env_file:
+      - .env.cluster
+    environment:
+      - BOT_INSTANCE_ID=3
+      - MONGO_HOST=mongodb-primary,mongodb-secondary-1,mongodb-secondary-2
+      - REDIS_HOST=redis-node-1,redis-node-2,redis-node-3,redis-node-4,redis-node-5,redis-node-6
+    depends_on:
+      - mongodb-primary
+      - redis-cluster-init
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ========== CELERY WORKERS (Scaled) ==========
+  
+  celery-worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_celery_worker_1
+    restart: unless-stopped
+    env_file:
+      - .env.cluster
+    environment:
+      - WORKER_ID=1
+      - MONGO_HOST=mongodb-primary,mongodb-secondary-1,mongodb-secondary-2
+      - REDIS_HOST=redis-node-1,redis-node-2,redis-node-3,redis-node-4,redis-node-5,redis-node-6
+    depends_on:
+      - mongodb-primary
+      - redis-cluster-init
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=1000 --hostname=worker1@%h
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery-worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_celery_worker_2
+    restart: unless-stopped
+    env_file:
+      - .env.cluster
+    environment:
+      - WORKER_ID=2
+      - MONGO_HOST=mongodb-primary,mongodb-secondary-1,mongodb-secondary-2
+      - REDIS_HOST=redis-node-1,redis-node-2,redis-node-3,redis-node-4,redis-node-5,redis-node-6
+    depends_on:
+      - mongodb-primary
+      - redis-cluster-init
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=1000 --hostname=worker2@%h
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_celery_beat
+    restart: unless-stopped
+    env_file:
+      - .env.cluster
+    environment:
+      - MONGO_HOST=mongodb-primary,mongodb-secondary-1,mongodb-secondary-2
+      - REDIS_HOST=redis-node-1,redis-node-2,redis-node-3,redis-node-4,redis-node-5,redis-node-6
+    depends_on:
+      - mongodb-primary
+      - redis-cluster-init
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    command: celery -A app.tasks.celery_app beat --loglevel=info --schedule=/app/celerybeat-schedule
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/celerybeat-schedule"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  # MongoDB volumes
+  mongodb_primary_data:
+  mongodb_secondary1_data:
+  mongodb_secondary2_data:
+  
+  # Redis volumes
+  redis_node1_data:
+  redis_node2_data:
+  redis_node3_data:
+  redis_node4_data:
+  redis_node5_data:
+  redis_node6_data:
+
+networks:
+  fok_network:
+    driver: bridge
