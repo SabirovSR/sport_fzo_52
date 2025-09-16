@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = Field("redis://redis:6379/0", env="CELERY_BROKER_URL")
     CELERY_RESULT_BACKEND: str = Field("redis://redis:6379/0", env="CELERY_RESULT_BACKEND")
     
+    # Cluster configuration
+    BOT_INSTANCE_ID: str = Field("1", env="BOT_INSTANCE_ID")
+    WORKER_ID: str = Field("1", env="WORKER_ID")
+    
     # Admin configuration
     ADMIN_CHAT_ID: int = Field(0, env="ADMIN_CHAT_ID")
     SUPER_ADMIN_IDS: str = Field("", env="SUPER_ADMIN_IDS")
@@ -43,16 +47,46 @@ class Settings(BaseSettings):
     @property
     def mongo_url(self) -> str:
         """Build MongoDB connection URL"""
+        # Handle multiple hosts (replica set)
+        if ',' in self.MONGO_HOST:
+            hosts = self.MONGO_HOST
+        else:
+            hosts = f"{self.MONGO_HOST}:{self.MONGO_PORT}"
+        
         if self.MONGO_USERNAME and self.MONGO_PASSWORD:
-            return f"mongodb://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOST}:{self.MONGO_PORT}/{self.MONGO_DB_NAME}"
-        return f"mongodb://{self.MONGO_HOST}:{self.MONGO_PORT}/{self.MONGO_DB_NAME}"
+            return f"mongodb://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{hosts}/{self.MONGO_DB_NAME}?authSource=admin"
+        return f"mongodb://{hosts}/{self.MONGO_DB_NAME}"
     
     @property
     def redis_url(self) -> str:
         """Build Redis connection URL"""
+        # Handle multiple hosts (cluster mode)
+        if ',' in self.REDIS_HOST:
+            # For Redis Cluster, return the first node
+            first_host = self.REDIS_HOST.split(',')[0]
+            host_port = first_host.split(':')
+            host = host_port[0]
+            port = host_port[1] if len(host_port) > 1 else self.REDIS_PORT
+        else:
+            host = self.REDIS_HOST
+            port = self.REDIS_PORT
+        
         if self.REDIS_PASSWORD:
-            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
-        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+            return f"redis://:{self.REDIS_PASSWORD}@{host}:{port}/0"
+        return f"redis://{host}:{port}/0"
+    
+    @property
+    def redis_cluster_nodes(self) -> list:
+        """Get Redis cluster nodes"""
+        if ',' in self.REDIS_HOST:
+            nodes = []
+            for host_port in self.REDIS_HOST.split(','):
+                host_port_parts = host_port.split(':')
+                host = host_port_parts[0]
+                port = int(host_port_parts[1]) if len(host_port_parts) > 1 else self.REDIS_PORT
+                nodes.append(f"{host}:{port}")
+            return nodes
+        return [f"{self.REDIS_HOST}:{self.REDIS_PORT}"]
     
     @property
     def super_admin_ids_list(self) -> List[int]:

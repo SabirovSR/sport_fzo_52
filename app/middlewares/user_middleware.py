@@ -5,6 +5,7 @@ from loguru import logger
 
 from app.database.repositories import user_repo
 from app.models import User
+from app.utils.metrics import metrics
 
 
 class UserMiddleware(BaseMiddleware):
@@ -40,6 +41,7 @@ class UserMiddleware(BaseMiddleware):
                 )
                 user = await user_repo.create(user)
                 logger.info(f"Created new user: {user.telegram_id}")
+                metrics.record_user_registration()
             else:
                 # Update user info if changed
                 updated = False

@@ -10,7 +10,7 @@ from loguru import logger
 from app.config import settings
 from app.utils.logging import setup_logging
 from app.database.connection import init_database, close_database
-from app.middlewares import RateLimitMiddleware, UserMiddleware
+from app.middlewares import RateLimitMiddleware, UserMiddleware, MetricsMiddleware
 from app.handlers import start_router, catalog_router, applications_router, admin_router, health_router
 
 
@@ -63,6 +63,8 @@ async def main():
     dp = Dispatcher()
     
     # Register middlewares
+    dp.message.middleware(MetricsMiddleware())
+    dp.callback_query.middleware(MetricsMiddleware())
     dp.message.middleware(RateLimitMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware())
     dp.message.middleware(UserMiddleware())

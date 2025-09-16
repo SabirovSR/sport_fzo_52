@@ -1,0 +1,142 @@
+groups:
+  - name: fok-bot.rules
+    rules:
+      # Bot Health Alerts
+      - alert: BotDown
+        expr: up{job="fok-bot"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FOK Bot is down"
+          description: "FOK Bot has been down for more than 1 minute."
+
+      - alert: BotHighErrorRate
+        expr: rate(http_requests_total{job="fok-bot",status=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in FOK Bot"
+          description: "FOK Bot error rate is {{ $value }} errors per second."
+
+      - alert: BotHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="fok-bot"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time in FOK Bot"
+          description: "95th percentile response time is {{ $value }} seconds."
+
+      # Celery Alerts
+      - alert: CeleryWorkerDown
+        expr: up{job="celery-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Celery worker is down"
+          description: "Celery worker has been down for more than 2 minutes."
+
+      - alert: CeleryHighQueueLength
+        expr: celery_queue_length > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Celery queue length"
+          description: "Celery queue has {{ $value }} pending tasks."
+
+      - alert: CeleryTaskFailureRate
+        expr: rate(celery_task_failed_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "Celery task failure rate is {{ $value }} failures per second."
+
+      # Database Alerts
+      - alert: MongoDBDown
+        expr: up{job="mongodb-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MongoDB is down"
+          description: "MongoDB has been down for more than 1 minute."
+
+      - alert: MongoDBHighConnections
+        expr: mongodb_connections{state="current"} / mongodb_connections{state="available"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MongoDB high connection usage"
+          description: "MongoDB is using {{ $value | humanizePercentage }} of available connections."
+
+      - alert: MongoDBReplicationLag
+        expr: mongodb_replset_member_replication_lag > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MongoDB replication lag"
+          description: "MongoDB replica member has {{ $value }} seconds replication lag."
+
+      # Redis Alerts
+      - alert: RedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}."
+
+      - alert: RedisHighConnections
+        expr: redis_connected_clients > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high connection count"
+          description: "Redis has {{ $value }} connected clients."
+
+      # System Alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}."
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }}."

@@ -22,14 +22,26 @@ async def get_database() -> AsyncIOMotorDatabase:
 async def init_database():
     """Initialize database connection"""
     try:
+        # Build connection options for replica set
+        connection_options = {
+            'maxPoolSize': 50,
+            'minPoolSize': 10,
+            'maxIdleTimeMS': 30000,
+            'waitQueueTimeoutMS': 5000,
+            'serverSelectionTimeoutMS': 5000,
+            'retryWrites': True,
+            'retryReads': True,
+            'readPreference': 'secondaryPreferred'
+        }
+        
+        # Add replica set name if using cluster mode
+        if ',' in settings.MONGO_HOST:
+            connection_options['replicaSet'] = 'fok-replica-set'
+        
         # Create MongoDB client
         db_connection.client = AsyncIOMotorClient(
             settings.mongo_url,
-            maxPoolSize=50,
-            minPoolSize=10,
-            maxIdleTimeMS=30000,
-            waitQueueTimeoutMS=5000,
-            serverSelectionTimeoutMS=5000
+            **connection_options
         )
         
         # Get database
