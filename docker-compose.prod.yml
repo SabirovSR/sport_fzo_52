@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_prod
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME}
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+      - ./backups:/backups
+    networks:
+      - fok_network
+    # Don't expose ports in production - use internal network only
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - fok_network
+    # Don't expose ports in production
+
+  bot:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+      - ./backups:/app/backups
+    networks:
+      - fok_network
+    ports:
+      - "8000:8000"  # For webhook
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_celery_worker_prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+      - ./backups:/app/backups
+    networks:
+      - fok_network
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=1000
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: fok_bot_celery_beat_prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+      - ./backups:/app/backups
+    networks:
+      - fok_network
+    command: celery -A app.tasks.celery_app beat --loglevel=info --schedule=/app/celerybeat-schedule
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/celerybeat-schedule"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    container_name: fok_bot_nginx_prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - bot
+    networks:
+      - fok_network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  fok_network:
+    driver: bridge
