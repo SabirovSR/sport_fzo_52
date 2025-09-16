@@ -1,0 +1,128 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "FOK Bot - Заявки и пользователи",
+    "tags": ["fok-bot", "applications"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Новые заявки по времени",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(fok_bot_applications_created_total[1h])",
+            "legendFormat": "Заявки/час",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Applications/hour",
+            "show": true
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Распределение заявок по статусам",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "fok_bot_applications_by_status",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Активность пользователей",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "fok_bot_active_users_total",
+            "legendFormat": "Активные пользователи",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Rate Limit срабатывания",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(fok_bot_rate_limit_hits_total[5m])",
+            "legendFormat": "Rate Limit Hits/sec",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Популярные ФОКи (по заявкам)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, fok_bot_fok_applications_total)",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Ошибки по типам",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(fok_bot_errors_total[5m])",
+            "legendFormat": "{{error_type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Время обработки запросов",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(fok_bot_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(fok_bot_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(fok_bot_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "99th percentile",
+            "refId": "C"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "show": true
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}

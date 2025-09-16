@@ -67,6 +67,10 @@ async def apply_to_fok(callback: CallbackQuery, user: User):
         user.total_applications += 1
         await user_repo.update(user)
         
+        # Record metrics
+        from app.utils.metrics import record_application_created
+        record_application_created()
+        
         # Send notification to admins
         try:
             await send_admin_notification.delay(

@@ -56,6 +56,10 @@ class RateLimitMiddleware(BaseMiddleware):
                     # Rate limit exceeded
                     logger.warning(f"Rate limit exceeded for user {user_id}")
                     
+                    # Record rate limit hit
+                    from app.utils.metrics import record_rate_limit_hit
+                    record_rate_limit_hit(user_id)
+                    
                     if isinstance(event, Message):
                         await event.answer(
                             "⚠️ Слишком много запросов. Пожалуйста, подождите немного.",

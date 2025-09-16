@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # MongoDB Primary
+  mongodb-primary:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_primary
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME}
+    volumes:
+      - mongodb_primary_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+      - ./mongodb/replica-init.js:/docker-entrypoint-initdb.d/replica-init.js:ro
+    command: mongod --replSet fok_replica --bind_ip_all
+    ports:
+      - "27017:27017"
+    networks:
+      - fok_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB Secondary 1
+  mongodb-secondary1:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_secondary1
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongodb_secondary1_data:/data/db
+    command: mongod --replSet fok_replica --bind_ip_all
+    ports:
+      - "27018:27017"
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB Secondary 2
+  mongodb-secondary2:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_secondary2
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongodb_secondary2_data:/data/db
+    command: mongod --replSet fok_replica --bind_ip_all
+    ports:
+      - "27019:27017"
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB Arbiter (для нечетного количества узлов)
+  mongodb-arbiter:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_arbiter
+    restart: unless-stopped
+    command: mongod --replSet fok_replica --bind_ip_all
+    ports:
+      - "27020:27017"
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - mongodb-secondary1
+      - mongodb-secondary2
+
+  # Инициализатор репликации
+  mongodb-replica-init:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_replica_init
+    depends_on:
+      mongodb-primary:
+        condition: service_healthy
+      mongodb-secondary1:
+        condition: service_healthy
+      mongodb-secondary2:
+        condition: service_healthy
+    volumes:
+      - ./mongodb/init-replica-set.js:/init-replica-set.js:ro
+    networks:
+      - fok_network
+    command: >
+      bash -c "
+        sleep 10 &&
+        mongosh --host mongodb-primary:27017 -u ${MONGO_USERNAME} -p ${MONGO_PASSWORD} --authenticationDatabase admin /init-replica-set.js &&
+        echo 'Replica set initialized successfully'
+      "
+    restart: "no"
+
+volumes:
+  mongodb_primary_data:
+  mongodb_secondary1_data:
+  mongodb_secondary2_data:
+
+networks:
+  fok_network:
+    external: true

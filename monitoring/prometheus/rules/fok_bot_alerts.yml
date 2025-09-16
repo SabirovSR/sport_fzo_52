@@ -1,0 +1,112 @@
+groups:
+  - name: fok_bot_alerts
+    rules:
+      # Высокая нагрузка на CPU
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая нагрузка на CPU"
+          description: "CPU использование на {{ $labels.instance }} составляет {{ $value }}%"
+
+      # Мало свободной памяти
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое использование памяти"
+          description: "Использование памяти на {{ $labels.instance }} составляет {{ $value }}%"
+
+      # Мало свободного места на диске
+      - alert: LowDiskSpace
+        expr: (node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_free_bytes{fstype!="tmpfs"}) / node_filesystem_size_bytes{fstype!="tmpfs"} * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Мало свободного места на диске"
+          description: "Свободное место на диске {{ $labels.mountpoint }} на {{ $labels.instance }} составляет {{ $value }}%"
+
+      # MongoDB недоступна
+      - alert: MongoDBDown
+        expr: up{job="mongodb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MongoDB недоступна"
+          description: "MongoDB на {{ $labels.instance }} недоступна"
+
+      # Redis недоступен
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis недоступен"
+          description: "Redis на {{ $labels.instance }} недоступен"
+
+      # FOK Bot недоступен
+      - alert: FOKBotDown
+        expr: up{job="fok_bot"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FOK Bot недоступен"
+          description: "FOK Bot на {{ $labels.instance }} недоступен"
+
+      # Высокий rate limit
+      - alert: HighRateLimitHits
+        expr: rate(fok_bot_rate_limit_hits_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий rate limit"
+          description: "Rate limit срабатывает {{ $value }} раз в секунду"
+
+      # Много ошибок в приложении
+      - alert: HighErrorRate
+        expr: rate(fok_bot_errors_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий уровень ошибок"
+          description: "Ошибки в приложении: {{ $value }} в секунду"
+
+      # Долгое время ответа
+      - alert: HighResponseTime
+        expr: fok_bot_request_duration_seconds{quantile="0.95"} > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Долгое время ответа"
+          description: "95-й процентиль времени ответа: {{ $value }} секунд"
+
+      # Много активных подключений к MongoDB
+      - alert: HighMongoDBConnections
+        expr: mongodb_connections{state="current"} > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много подключений к MongoDB"
+          description: "Активных подключений к MongoDB: {{ $value }}"
+
+      # Высокое использование памяти Redis
+      - alert: HighRedisMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое использование памяти Redis"
+          description: "Использование памяти Redis: {{ $value }}%"

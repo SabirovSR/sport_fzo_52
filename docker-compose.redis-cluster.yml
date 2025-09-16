@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  # Redis Cluster Nodes
+  redis-node-1:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_1
+    restart: unless-stopped
+    command: redis-server /etc/redis/redis.conf
+    volumes:
+      - ./redis/redis-cluster.conf:/etc/redis/redis.conf:ro
+      - redis_node_1_data:/data
+    ports:
+      - "7001:7001"
+      - "17001:17001"
+    networks:
+      - fok_network
+    environment:
+      - REDIS_PORT=7001
+
+  redis-node-2:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_2
+    restart: unless-stopped
+    command: redis-server /etc/redis/redis.conf
+    volumes:
+      - ./redis/redis-cluster.conf:/etc/redis/redis.conf:ro
+      - redis_node_2_data:/data
+    ports:
+      - "7002:7002"
+      - "17002:17002"
+    networks:
+      - fok_network
+    environment:
+      - REDIS_PORT=7002
+
+  redis-node-3:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_3
+    restart: unless-stopped
+    command: redis-server /etc/redis/redis.conf
+    volumes:
+      - ./redis/redis-cluster.conf:/etc/redis/redis.conf:ro
+      - redis_node_3_data:/data
+    ports:
+      - "7003:7003"
+      - "17003:17003"
+    networks:
+      - fok_network
+    environment:
+      - REDIS_PORT=7003
+
+  redis-node-4:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_4
+    restart: unless-stopped
+    command: redis-server /etc/redis/redis.conf
+    volumes:
+      - ./redis/redis-cluster.conf:/etc/redis/redis.conf:ro
+      - redis_node_4_data:/data
+    ports:
+      - "7004:7004"
+      - "17004:17004"
+    networks:
+      - fok_network
+    environment:
+      - REDIS_PORT=7004
+
+  redis-node-5:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_5
+    restart: unless-stopped
+    command: redis-server /etc/redis/redis.conf
+    volumes:
+      - ./redis/redis-cluster.conf:/etc/redis/redis.conf:ro
+      - redis_node_5_data:/data
+    ports:
+      - "7005:7005"
+      - "17005:17005"
+    networks:
+      - fok_network
+    environment:
+      - REDIS_PORT=7005
+
+  redis-node-6:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_6
+    restart: unless-stopped
+    command: redis-server /etc/redis/redis.conf
+    volumes:
+      - ./redis/redis-cluster.conf:/etc/redis/redis.conf:ro
+      - redis_node_6_data:/data
+    ports:
+      - "7006:7006"
+      - "17006:17006"
+    networks:
+      - fok_network
+    environment:
+      - REDIS_PORT=7006
+
+  # Redis Cluster Initializer
+  redis-cluster-init:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_cluster_init
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    networks:
+      - fok_network
+    command: >
+      sh -c "
+        sleep 10 &&
+        redis-cli --cluster create 
+        redis-node-1:7001 
+        redis-node-2:7002 
+        redis-node-3:7003 
+        redis-node-4:7004 
+        redis-node-5:7005 
+        redis-node-6:7006 
+        --cluster-replicas 1 --cluster-yes &&
+        echo 'Redis cluster initialized successfully'
+      "
+    restart: "no"
+
+volumes:
+  redis_node_1_data:
+  redis_node_2_data:
+  redis_node_3_data:
+  redis_node_4_data:
+  redis_node_5_data:
+  redis_node_6_data:
+
+networks:
+  fok_network:
+    external: true

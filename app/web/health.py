@@ -4,6 +4,7 @@ import json
 from loguru import logger
 
 from app.database.connection import check_database_health, get_database_stats
+from app.utils.metrics import get_metrics
 
 
 async def health_check(request):
@@ -79,9 +80,34 @@ async def ready_check(request):
         )
 
 
+async def metrics_endpoint(request):
+    """Prometheus metrics endpoint"""
+    try:
+        # Update metrics before serving
+        from app.utils.metrics import update_application_metrics, update_user_metrics
+        await update_application_metrics()
+        await update_user_metrics()
+        
+        # Get metrics
+        metrics_data = get_metrics()
+        
+        return web.Response(
+            text=metrics_data,
+            content_type='text/plain; version=0.0.4; charset=utf-8'
+        )
+    except Exception as e:
+        logger.error(f"Metrics endpoint error: {e}")
+        return web.Response(
+            text=f"# Error generating metrics: {e}\n",
+            status=500,
+            content_type='text/plain'
+        )
+
+
 def setup_health_routes(app: web.Application):
     """Setup health check routes"""
     app.router.add_get('/health', health_check)
     app.router.add_get('/ready', ready_check)
     app.router.add_get('/healthz', health_check)  # Kubernetes style
     app.router.add_get('/readyz', ready_check)   # Kubernetes style
+    app.router.add_get('/metrics', metrics_endpoint)  # Prometheus metrics

@@ -1,0 +1,455 @@
+version: '3.8'
+
+# Enterprise-grade FOK Bot с полным мониторингом и высокой доступностью
+services:
+  # ===== LOAD BALANCER =====
+  haproxy:
+    image: haproxy:2.8-alpine
+    container_name: fok_bot_haproxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"  # HAProxy stats
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./ssl:/etc/ssl/certs:ro
+    networks:
+      - fok_network
+    depends_on:
+      - bot-1
+      - bot-2
+      - bot-3
+
+  # ===== BOT INSTANCES =====
+  bot-1:
+    build: .
+    container_name: fok_bot_instance_1
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - BOT_INSTANCE_ID=1
+      - BOT_PORT=8001
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bot-2:
+    build: .
+    container_name: fok_bot_instance_2
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - BOT_INSTANCE_ID=2
+      - BOT_PORT=8002
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bot-3:
+    build: .
+    container_name: fok_bot_instance_3
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - BOT_INSTANCE_ID=3
+      - BOT_PORT=8003
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===== MONGODB REPLICA SET =====
+  mongodb-primary:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_primary
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME}
+    volumes:
+      - mongodb_primary_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    command: mongod --replSet fok_replica --bind_ip_all
+    ports:
+      - "27017:27017"
+    networks:
+      - fok_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb-secondary1:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_secondary1
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongodb_secondary1_data:/data/db
+    command: mongod --replSet fok_replica --bind_ip_all
+    ports:
+      - "27018:27017"
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+
+  mongodb-secondary2:
+    image: mongo:7.0
+    container_name: fok_bot_mongodb_secondary2
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongodb_secondary2_data:/data/db
+    command: mongod --replSet fok_replica --bind_ip_all
+    ports:
+      - "27019:27017"
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+
+  # ===== REDIS CLUSTER =====
+  redis-node-1:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_1
+    restart: unless-stopped
+    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7001
+    ports:
+      - "7001:7001"
+      - "17001:17001"
+    volumes:
+      - redis_node_1_data:/data
+    networks:
+      - fok_network
+
+  redis-node-2:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_2
+    restart: unless-stopped
+    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7002
+    ports:
+      - "7002:7002"
+      - "17002:17002"
+    volumes:
+      - redis_node_2_data:/data
+    networks:
+      - fok_network
+
+  redis-node-3:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_3
+    restart: unless-stopped
+    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7003
+    ports:
+      - "7003:7003"
+      - "17003:17003"
+    volumes:
+      - redis_node_3_data:/data
+    networks:
+      - fok_network
+
+  redis-node-4:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_4
+    restart: unless-stopped
+    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7004
+    ports:
+      - "7004:7004"
+      - "17004:17004"
+    volumes:
+      - redis_node_4_data:/data
+    networks:
+      - fok_network
+
+  redis-node-5:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_5
+    restart: unless-stopped
+    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7005
+    ports:
+      - "7005:7005"
+      - "17005:17005"
+    volumes:
+      - redis_node_5_data:/data
+    networks:
+      - fok_network
+
+  redis-node-6:
+    image: redis:7.2-alpine
+    container_name: fok_bot_redis_node_6
+    restart: unless-stopped
+    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7006
+    ports:
+      - "7006:7006"
+      - "17006:17006"
+    volumes:
+      - redis_node_6_data:/data
+    networks:
+      - fok_network
+
+  # ===== CELERY WORKERS =====
+  celery-worker-1:
+    build: .
+    container_name: fok_bot_celery_worker_1
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - CELERY_WORKER_ID=1
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --hostname=worker1@%h
+
+  celery-worker-2:
+    build: .
+    container_name: fok_bot_celery_worker_2
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - CELERY_WORKER_ID=2
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --hostname=worker2@%h
+
+  celery-beat:
+    build: .
+    container_name: fok_bot_celery_beat
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+
+  # ===== MONITORING STACK =====
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fok_bot_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - fok_network
+      - monitoring_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fok_bot_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring_network
+
+  loki:
+    image: grafana/loki:latest
+    container_name: fok_bot_loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring_network
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: fok_bot_promtail
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - ./logs:/app/logs:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - monitoring_network
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: fok_bot_alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - monitoring_network
+
+  # ===== EXPORTERS =====
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: fok_bot_node_exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring_network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: fok_bot_cadvisor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    networks:
+      - monitoring_network
+
+  mongodb_exporter:
+    image: percona/mongodb_exporter:latest
+    container_name: fok_bot_mongodb_exporter
+    restart: unless-stopped
+    ports:
+      - "9216:9216"
+    environment:
+      - MONGODB_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb-primary:27017
+    depends_on:
+      - mongodb-primary
+    networks:
+      - fok_network
+      - monitoring_network
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: fok_bot_redis_exporter
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-node-1:7001
+    depends_on:
+      - redis-node-1
+    networks:
+      - fok_network
+      - monitoring_network
+
+volumes:
+  # MongoDB
+  mongodb_primary_data:
+  mongodb_secondary1_data:
+  mongodb_secondary2_data:
+  
+  # Redis
+  redis_node_1_data:
+  redis_node_2_data:
+  redis_node_3_data:
+  redis_node_4_data:
+  redis_node_5_data:
+  redis_node_6_data:
+  
+  # Monitoring
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:
+
+networks:
+  fok_network:
+    driver: bridge
+  monitoring_network:
+    driver: bridge

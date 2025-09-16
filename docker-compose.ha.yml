@@ -1,0 +1,187 @@
+version: '3.8'
+
+services:
+  # HAProxy Load Balancer
+  haproxy:
+    image: haproxy:2.8-alpine
+    container_name: fok_bot_haproxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"  # HAProxy stats
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./ssl:/etc/ssl/certs:ro
+    networks:
+      - fok_network
+    depends_on:
+      - bot-1
+      - bot-2
+      - bot-3
+
+  # Bot Instance 1
+  bot-1:
+    build: .
+    container_name: fok_bot_instance_1
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - BOT_INSTANCE_ID=1
+      - BOT_PORT=8001
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: python main.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Bot Instance 2
+  bot-2:
+    build: .
+    container_name: fok_bot_instance_2
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - BOT_INSTANCE_ID=2
+      - BOT_PORT=8002
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: python main.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Bot Instance 3
+  bot-3:
+    build: .
+    container_name: fok_bot_instance_3
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - BOT_INSTANCE_ID=3
+      - BOT_PORT=8003
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: python main.py
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker Pool
+  celery-worker-1:
+    build: .
+    container_name: fok_bot_celery_worker_1
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - CELERY_WORKER_ID=1
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --hostname=worker1@%h
+
+  celery-worker-2:
+    build: .
+    container_name: fok_bot_celery_worker_2
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - CELERY_WORKER_ID=2
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --hostname=worker2@%h
+
+  celery-worker-3:
+    build: .
+    container_name: fok_bot_celery_worker_3
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - CELERY_WORKER_ID=3
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 --hostname=worker3@%h
+
+  # Celery Beat (только один экземпляр)
+  celery-beat:
+    build: .
+    container_name: fok_bot_celery_beat
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    volumes:
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    networks:
+      - fok_network
+    depends_on:
+      - mongodb-primary
+      - redis-node-1
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+
+  # Celery Flower (мониторинг)
+  celery-flower:
+    build: .
+    container_name: fok_bot_celery_flower
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    ports:
+      - "5555:5555"
+    networks:
+      - fok_network
+    depends_on:
+      - redis-node-1
+    command: celery -A app.tasks.celery_app flower --port=5555
+
+networks:
+  fok_network:
+    external: true

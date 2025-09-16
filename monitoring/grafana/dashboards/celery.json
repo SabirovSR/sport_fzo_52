@@ -1,0 +1,142 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "FOK Bot - Celery Tasks",
+    "tags": ["fok-bot", "celery"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Выполненные задачи",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(fok_bot_celery_tasks_total{status=\"success\"}[5m])",
+            "legendFormat": "{{task_name}} - Success",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(fok_bot_celery_tasks_total{status=\"error\"}[5m])",
+            "legendFormat": "{{task_name}} - Error",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Время выполнения задач",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(fok_bot_celery_task_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{task_name}} - 95th percentile",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Seconds",
+            "show": true
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Активные воркеры",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "celery_workers_total",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Задач в очереди",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "celery_queue_length",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Успешность задач (%)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(fok_bot_celery_tasks_total{status=\"success\"}[5m]) / rate(fok_bot_celery_tasks_total[5m]) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 80},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8}
+      },
+      {
+        "id": 6,
+        "title": "Ошибки задач",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(fok_bot_celery_tasks_total{status=\"error\"}[1h])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8}
+      },
+      {
+        "id": 7,
+        "title": "Детализация по задачам",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "sum by (task_name) (rate(fok_bot_celery_tasks_total[5m]))",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s"
+  }
+}
