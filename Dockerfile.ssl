@@ -1,0 +1,68 @@
+# Multi-stage build for SSL-enabled FOK Bot
+FROM python:3.11-slim as base
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    nginx \
+    certbot \
+    python3-certbot-nginx \
+    cron \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /var/www/html/.well-known/acme-challenge \
+    && mkdir -p /var/log/ssl-renewal \
+    && chmod +x scripts/ssl_manager.py
+
+# Copy nginx configuration
+COPY nginx.ssl.conf /etc/nginx/sites-available/default
+
+# Copy SSL management script
+COPY scripts/ssl_manager.py /usr/local/bin/ssl_manager.py
+RUN chmod +x /usr/local/bin/ssl_manager.py
+
+# Create startup script
+RUN echo '#!/bin/bash\n\
+# Start nginx\n\
+nginx\n\
+\n\
+# Setup SSL if domain is provided\n\
+if [ ! -z "$SSL_DOMAIN" ] && [ ! -z "$SSL_EMAIL" ]; then\n\
+    echo "Setting up SSL for domain: $SSL_DOMAIN"\n\
+    python3 /usr/local/bin/ssl_manager.py \\\n\
+        --domain "$SSL_DOMAIN" \\\n\
+        --email "$SSL_EMAIL" \\\n\
+        --webroot "/var/www/html"\n\
+    \n\
+    # Setup automatic renewal\n\
+    python3 /usr/local/bin/ssl_manager.py \\\n\
+        --domain "$SSL_DOMAIN" \\\n\
+        --email "$SSL_EMAIL" \\\n\
+        --setup-auto\n\
+fi\n\
+\n\
+# Start the bot application\n\
+exec python3 main.py' > /usr/local/bin/start.sh
+
+RUN chmod +x /usr/local/bin/start.sh
+
+# Expose ports
+EXPOSE 80 443
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost/health || exit 1
+
+# Start the application
+CMD ["/usr/local/bin/start.sh"]

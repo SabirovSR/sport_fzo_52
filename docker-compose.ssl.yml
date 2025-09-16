@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  fok-bot-ssl:
+    build:
+      context: .
+      dockerfile: Dockerfile.ssl
+    container_name: fok-bot-ssl
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - MONGO_HOST=${MONGO_HOST:-mongodb}
+      - MONGO_PORT=${MONGO_PORT:-27017}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-fok_bot}
+      - MONGO_USERNAME=${MONGO_USERNAME}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - ADMIN_CHAT_ID=${ADMIN_CHAT_ID}
+      - SUPER_ADMIN_IDS=${SUPER_ADMIN_IDS}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SSL_DOMAIN=${SSL_DOMAIN}
+      - SSL_EMAIL=${SSL_EMAIL}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+    volumes:
+      - ssl_certs:/etc/letsencrypt
+      - nginx_logs:/var/log/nginx
+      - ssl_logs:/var/log/ssl-renewal
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - fok-network
+
+  mongodb:
+    image: mongo:7.0
+    container_name: fok-mongodb-ssl
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - fok-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: fok-redis-ssl
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - fok-network
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fok-celery-ssl
+    restart: unless-stopped
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - MONGO_HOST=${MONGO_HOST:-mongodb}
+      - MONGO_PORT=${MONGO_PORT:-27017}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-fok_bot}
+      - MONGO_USERNAME=${MONGO_USERNAME}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - fok-network
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fok-celery-beat-ssl
+    restart: unless-stopped
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - MONGO_HOST=${MONGO_HOST:-mongodb}
+      - MONGO_PORT=${MONGO_PORT:-27017}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-fok_bot}
+      - MONGO_USERNAME=${MONGO_USERNAME}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - fok-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+  ssl_certs:
+  nginx_logs:
+  ssl_logs:
+
+networks:
+  fok-network:
+    driver: bridge
